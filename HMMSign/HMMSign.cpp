@@ -1059,6 +1059,58 @@ void GalleryCombine(vector<double> HOG0[][LRB][MaxOri],
 
 }
 
+
+int Recognize(IplImage *ipl, HMMParams m_hmmp, CSign m_sign[])
+{
+	float like_array[1000];
+	CvSize cvroi = cvSize(ipl->roi ? ipl->roi->width : ipl->width,
+                               ipl->roi ? ipl->roi->height : ipl->height);
+    CvSize num_obs;
+    CvImgObsInfo* info;
+    
+    CV_COUNT_OBS(&cvroi, &m_hmmp.dctSize, &m_hmmp.delta, &num_obs); 
+
+    int vect_len = m_hmmp.obsSize.height * m_hmmp.obsSize.width;
+
+	info = cvCreateObsInfo(num_obs, vect_len);
+	
+	cvImgToObs_DCT(ipl, info->obs, m_hmmp.dctSize, m_hmmp.obsSize, m_hmmp.delta);//Feature extraction
+
+	float max_like = -100000000; 
+
+	//CvEHMM* hmm = 0;
+	for(int i=0;i<Posture_num;i++)
+	{
+		if (m_sign[i].m_trained == true)
+		{
+			CvEHMM* hmm = 0;
+			hmm=m_sign[i].m_hmm;
+			cvEstimateObsProb(info, hmm);         //Observation likelihood. 
+			like_array[i] = cvEViterbi(info, hmm);//Viterbi algorithm.
+		}
+		else
+		{
+			like_array[i] = max_like;
+		}
+	}
+    cvReleaseObsInfo(&info);
+
+		//Search the best matched one. 
+	float maxl = -FLT_MAX;
+	int maxind = -1;
+
+	for(int j = 0; j < Posture_num; j++)
+	{
+		if (like_array[j] > maxl)
+		{
+			maxl = like_array[j];
+			maxind = j;
+		}
+	}
+
+	return maxind;
+}
+
 int main()
 {
 	int i,j,k,g,m,n;
@@ -1072,19 +1124,19 @@ int main()
 	outfile1_csv.open("..\\output\\Gallery_Data.csv",ios::out);
 	outfile_LRBLabel.open("..\\output\\LRBLabel.txt",ios::out);
 
-	for (i=0; i<1; i++)
+	for (i=0; i<2; i++)
 	{
 		dataTofeature(TestdataFolder,Posture_num,keyFrameNo[i],Route[i],HOG[i],50+i);
 		//TestdataFolder and 50+i are used for creating route. 
 	}
 
 	HMMParams m_hmmp;
-	m_hmmp.stateNum[0] = 5;
+	m_hmmp.stateNum[0] = 1;
 	m_hmmp.stateNum[1] = 3;
-	m_hmmp.stateNum[2] = 6;
-	m_hmmp.stateNum[3] = 6;
-	m_hmmp.stateNum[4] = 6;
-	m_hmmp.stateNum[5] = 3;
+	//m_hmmp.stateNum[2] = 6;
+	//m_hmmp.stateNum[3] = 6;
+	//m_hmmp.stateNum[4] = 6;
+	//m_hmmp.stateNum[5] = 3;
 	//m_hmmp.stateNum[6] = 3;
 	//m_hmmp.stateNum[7] = 3;
 	for( int i = 0; i < 128; i++ )
@@ -1107,6 +1159,17 @@ int main()
 		}
 		
 	}
+
+	for (int w=0; w<Posture_num; w++)
+	{
+		cout<<"Sign ID ---------------"<<w<<"---------------"<<endl;
+		for (int i=0; i<keyFrameNo[0][w][0]; i++)
+		{
+			int clasd = Recognize(Route[0][w][0][i], m_hmmp, m_sign);
+			cout<<"The result is: "<<clasd<<endl;
+		}
+	}
+	
 	
 
 	outfile1.close();
